@@ -7,7 +7,6 @@ import '../config/api_config.dart';
 import '../l10n/app_localizations.dart';
 import '../utils/validators.dart';
 import '../widgets/language_toggle_button.dart';
-import '../widgets/theme_toggle_button.dart';
 
 /// Beautiful login screen with:
 /// - Animated gradient background with floating translucent shapes
@@ -129,20 +128,13 @@ class _LoginScreenState extends State<LoginScreen>
               ),
             ),
 
-            // ── Theme & Language Switchers Top Right ───────
+            // ── Language Switcher Top Right ─────────────────
             const SafeArea(
               child: Align(
                 alignment: Alignment.topRight,
                 child: Padding(
                   padding: EdgeInsets.only(top: 12, right: 20, left: 20),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ThemeToggleButton(),
-                      SizedBox(width: 8),
-                      LanguageToggleButton(),
-                    ],
-                  ),
+                  child: LanguageToggleButton(),
                 ),
               ),
             ),
