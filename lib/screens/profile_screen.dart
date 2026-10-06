@@ -316,15 +316,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             value: user.phone!,
           ),
         ],
-        const Divider(height: 1),
-        _buildInfoTile(
-          cs: cs,
-          icon: Icons.tag_rounded,
-          label: context.tr('user_id'),
-          value: '#${user.id}',
-          onTap: () => _copyToClipboard(user.id.toString(), context.tr('user_id')),
-          trailing: const Icon(Icons.copy_rounded, size: 16, color: AppTheme.primaryColor),
-        ),
       ],
     );
   }
