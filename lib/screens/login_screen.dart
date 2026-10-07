@@ -285,18 +285,18 @@ class _LoginScreenState extends State<LoginScreen>
               // Title
               Text(
                 context.tr('welcome_back'),
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
-                  color: cs.onSurface,
+                  color: Color(0xFF0F172A),
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 context.tr('sign_in_subtitle'),
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 13,
-                  color: cs.onSurface.withValues(alpha: 0.55),
+                  color: Color(0xFF64748B),
                 ),
               ),
               const SizedBox(height: 28),
@@ -306,6 +306,7 @@ class _LoginScreenState extends State<LoginScreen>
               const SizedBox(height: 6),
               TextFormField(
                 controller: _emailController,
+                style: const TextStyle(color: Color(0xFF0F172A), fontSize: 15),
                 keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.next,
                 validator: Validators.validateEmail,
@@ -322,6 +323,7 @@ class _LoginScreenState extends State<LoginScreen>
               const SizedBox(height: 6),
               TextFormField(
                 controller: _passwordController,
+                style: const TextStyle(color: Color(0xFF0F172A), fontSize: 15),
                 obscureText: _obscurePassword,
                 textInputAction: TextInputAction.done,
                 validator: Validators.validatePassword,

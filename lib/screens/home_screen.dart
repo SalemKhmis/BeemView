@@ -280,7 +280,69 @@ class _HomeScreenState extends State<HomeScreen> {
 
         // Language Switcher (EN / العربية)
         const LanguageToggleButton(isCompact: true),
+        const SizedBox(width: 4),
+
+        // Logout Action
+        IconButton(
+          onPressed: () => _showLogoutDialog(cs),
+          icon: Icon(Icons.logout_rounded, color: cs.onSurfaceVariant),
+          tooltip: context.tr('logout'),
+        ),
       ],
+    );
+  }
+
+  void _showLogoutDialog(ColorScheme cs) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: cs.error.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.logout_rounded, color: cs.error, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              context.tr('logout'),
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Text(
+          context.tr('logout_confirm'),
+          style: TextStyle(color: cs.onSurfaceVariant),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(
+              context.tr('cancel'),
+              style: TextStyle(color: cs.onSurfaceVariant),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: cs.error,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(100, 42),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              context.read<AuthCubit>().logout();
+            },
+            child: Text(context.tr('logout')),
+          ),
+        ],
+      ),
     );
   }
 

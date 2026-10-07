@@ -77,7 +77,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFC),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: BlocConsumer<TaskDetailCubit, TaskDetailState>(
         listener: _stateListener,
         builder: (context, state) {
@@ -726,10 +726,10 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFFF4F6FB),
+                color: cs.surfaceContainerLowest,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: const Color(0xFFE3E8F5),
+                  color: cs.outlineVariant.withValues(alpha: 0.35),
                   width: 1,
                 ),
               ),
@@ -747,8 +747,12 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
               decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFC),
+                color: cs.surfaceContainerLowest,
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: cs.outlineVariant.withValues(alpha: 0.25),
+                  width: 1,
+                ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -948,6 +952,10 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
             maxLines: 3,
             enabled: !isSubmitting,
             textInputAction: TextInputAction.done,
+            style: TextStyle(
+              fontSize: 14,
+              color: cs.onSurface,
+            ),
             decoration: InputDecoration(
               hintText: 'Add a comment or update reason…',
               hintStyle: TextStyle(
@@ -955,14 +963,14 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 color: cs.onSurface.withValues(alpha: 0.35),
               ),
               filled: true,
-              fillColor: const Color(0xFFF8F9FC),
+              fillColor: cs.surfaceContainerLowest,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFFE0E4EC)),
+                borderSide: BorderSide(color: cs.outlineVariant),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFFE0E4EC)),
+                borderSide: BorderSide(color: cs.outlineVariant),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -970,7 +978,8 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               ),
               disabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFFEAEAEA)),
+                borderSide: BorderSide(
+                    color: cs.outlineVariant.withValues(alpha: 0.3)),
               ),
               contentPadding: const EdgeInsets.all(14),
             ),
