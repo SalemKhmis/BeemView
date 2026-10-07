@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -17,7 +19,16 @@ class AuthRepository {
   final AuthApi _authApi;
   final FlutterSecureStorage _secureStorage;
 
+  static const _defaultAndroidOptions = AndroidOptions(
+    encryptedSharedPreferences: true,
+    resetOnError: true,
+  );
+  static const _defaultIosOptions = IOSOptions(
+    accessibility: KeychainAccessibility.first_unlock,
+  );
+
   static const _tokenKey = 'auth_token';
+  static const _userJsonKey = 'auth_user_json';
   static const _userIdKey = 'user_id';
   static const _userNameKey = 'user_name';
   static const _userEmailKey = 'user_email';
@@ -36,7 +47,11 @@ class AuthRepository {
   AuthRepository({
     required this._authApi,
     FlutterSecureStorage? secureStorage,
-  })  : _secureStorage = secureStorage ?? const FlutterSecureStorage();
+  })  : _secureStorage = secureStorage ??
+            const FlutterSecureStorage(
+              aOptions: _defaultAndroidOptions,
+              iOptions: _defaultIosOptions,
+            );
 
   /// Authenticates the user with email, password, and subdomain.
   ///
@@ -72,33 +87,84 @@ class AuthRepository {
 
   /// Attempts to restore a previously persisted session.
   ///
-  /// Reads the stored token and validates it by calling the
-  /// `GET /users/me/profile` endpoint. If validation succeeds,
-  /// the session is restored. If it fails (401 or any error),
-  /// the stored session is cleared.
+  /// Reads the stored token and cached user. If present, validates with
+  /// the server. If the server is unreachable (offline/timeout/server error),
+  /// the session remains active with the cached user. Only a 401 Unauthorized
+  /// response clears the session.
   ///
   /// Returns the [User] if the session is valid, or null.
   Future<User?> restoreSession() async {
     try {
-      final storedToken = await _secureStorage.read(key: _tokenKey);
+      final storedToken = await _readStorage(_tokenKey);
       if (storedToken == null || storedToken.isEmpty) {
         return null;
       }
 
       _token = storedToken;
 
-      // Validate the token by fetching the current user profile
-      final user = await _authApi.getCurrentUser();
-      _currentUser = user;
+      // 1. Restore the locally cached user first
+      User? restoredUser;
+      final cachedUserJson = await _readStorage(_userJsonKey);
+      if (cachedUserJson != null && cachedUserJson.isNotEmpty) {
+        try {
+          final Map<String, dynamic> userMap = jsonDecode(cachedUserJson);
+          restoredUser = User.fromJson(userMap);
+        } catch (_) {}
+      }
 
-      return user;
-    } on DioException {
-      // Token is invalid/expired — clear everything
-      await clearSession();
-      return null;
+      // Fallback: reconstruct from individual stored fields
+      if (restoredUser == null) {
+        final idStr = await _readStorage(_userIdKey);
+        final name = await _readStorage(_userNameKey);
+        final email = await _readStorage(_userEmailKey);
+        if (name != null && name.isNotEmpty) {
+          restoredUser = User(
+            id: int.tryParse(idStr ?? '0') ?? 0,
+            fullName: name,
+            email: email,
+          );
+        }
+      }
+
+      if (restoredUser != null) {
+        _currentUser = restoredUser;
+      }
+
+      // 2. Validate/refresh user profile from server
+      try {
+        final freshUser = await _authApi.getCurrentUser();
+        _currentUser = freshUser;
+        try {
+          await _writeStorage(_userJsonKey, jsonEncode(freshUser.toJson()));
+          await _writeStorage(_userNameKey, freshUser.fullName);
+          if (freshUser.email != null) {
+            await _writeStorage(_userEmailKey, freshUser.email!);
+          }
+        } catch (_) {}
+        return freshUser;
+      } on DioException catch (dioErr) {
+        // Only if the server explicitly rejects the token with 401 Unauthorized
+        if (dioErr.response?.statusCode == 401) {
+          await clearSession();
+          return null;
+        }
+        // Network timeout / offline / connection errors: keep session alive!
+        if (_currentUser != null) {
+          return _currentUser;
+        }
+        final fallback = User(id: 0, fullName: 'User');
+        _currentUser = fallback;
+        return fallback;
+      } catch (_) {
+        // Non-401 unexpected error (e.g. format issues): keep session alive
+        if (_currentUser != null) {
+          return _currentUser;
+        }
+        final fallback = User(id: 0, fullName: 'User');
+        _currentUser = fallback;
+        return fallback;
+      }
     } catch (_) {
-      // Any other error (e.g., storage failure)
-      await clearSession();
       return null;
     }
   }
@@ -112,17 +178,13 @@ class AuthRepository {
     try {
       final user = await _authApi.getCurrentUser();
       _currentUser = user;
-      // Update locally cached name/email in secure storage if changed
-      await _secureStorage.write(
-        key: _userNameKey,
-        value: user.fullName,
-      );
-      if (user.email != null) {
-        await _secureStorage.write(
-          key: _userEmailKey,
-          value: user.email!,
-        );
-      }
+      try {
+        await _writeStorage(_userJsonKey, jsonEncode(user.toJson()));
+        await _writeStorage(_userNameKey, user.fullName);
+        if (user.email != null) {
+          await _writeStorage(_userEmailKey, user.email!);
+        }
+      } catch (_) {}
       return user;
     } on DioException catch (e) {
       throw AuthException(_extractErrorMessage(e));
@@ -134,41 +196,72 @@ class AuthRepository {
   /// Called on:
   /// - Manual logout (no server revocation per contract)
   /// - 401 from the [AuthInterceptor]
-  /// - Failed session restore
+  /// - Explicit token invalidation
   Future<void> clearSession() async {
     _token = null;
     _currentUser = null;
 
-    await _secureStorage.delete(key: _tokenKey);
-    await _secureStorage.delete(key: _userIdKey);
-    await _secureStorage.delete(key: _userNameKey);
-    await _secureStorage.delete(key: _userEmailKey);
+    await _deleteStorage(_tokenKey);
+    await _deleteStorage(_userJsonKey);
+    await _deleteStorage(_userIdKey);
+    await _deleteStorage(_userNameKey);
+    await _deleteStorage(_userEmailKey);
   }
 
   /// Provides the current token for the [AuthInterceptor].
   /// This is passed as the `tokenProvider` callback to [ApiClient].
   Future<String?> getToken() async {
+    if (_token != null && _token!.isNotEmpty) return _token;
+    _token = await _readStorage(_tokenKey);
     return _token;
   }
 
   // ── Private helpers ─────────────────────────────────────────
 
   Future<void> _persistSession(LoginResponse response) async {
-    await _secureStorage.write(key: _tokenKey, value: response.token);
-    await _secureStorage.write(
-      key: _userIdKey,
-      value: response.user.id.toString(),
-    );
-    await _secureStorage.write(
-      key: _userNameKey,
-      value: response.user.fullName,
-    );
+    await _writeStorage(_tokenKey, response.token);
+    try {
+      await _writeStorage(_userJsonKey, jsonEncode(response.user.toJson()));
+    } catch (_) {}
+    await _writeStorage(_userIdKey, response.user.id.toString());
+    await _writeStorage(_userNameKey, response.user.fullName);
     if (response.user.email != null) {
-      await _secureStorage.write(
-        key: _userEmailKey,
-        value: response.user.email,
-      );
+      await _writeStorage(_userEmailKey, response.user.email!);
     }
+  }
+
+  Future<String?> _readStorage(String key) async {
+    try {
+      final val = await _secureStorage.read(key: key);
+      if (val != null && val.isNotEmpty) return val;
+    } catch (_) {}
+    try {
+      const fallback = FlutterSecureStorage();
+      final val = await fallback.read(key: key);
+      if (val != null && val.isNotEmpty) return val;
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> _writeStorage(String key, String value) async {
+    try {
+      await _secureStorage.write(key: key, value: value);
+    } catch (_) {
+      try {
+        const fallback = FlutterSecureStorage();
+        await fallback.write(key: key, value: value);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _deleteStorage(String key) async {
+    try {
+      await _secureStorage.delete(key: key);
+    } catch (_) {}
+    try {
+      const fallback = FlutterSecureStorage();
+      await fallback.delete(key: key);
+    } catch (_) {}
   }
 
   /// Extracts a user-friendly error message from a [DioException].
